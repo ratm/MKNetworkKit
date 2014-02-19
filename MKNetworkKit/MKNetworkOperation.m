@@ -650,15 +650,20 @@ OSStatus extractIdentityAndTrust(CFDataRef inPKCS12Data,
       [self.request.HTTPMethod isEqualToString:@"PATCH"]) {
     
     NSString *option = [self.filesToBePosted count] == 0 ? @"-d" : @"-F";
+
     if(self.postDataEncoding == MKNKPostDataEncodingTypeURL) {
       [self.fieldsToBePosted enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL *stop) {
-        
-        [displayString appendFormat:@" %@ \"%@=%@\"", option, key, obj];
+        if( [obj isKindOfClass:[NSArray class]] ){
+          for(id o in obj){
+            [displayString appendFormat:@" %@ \"%@=%@\"", option, key, o];                
+          }
+        } else {
+          [displayString appendFormat:@" %@ \"%@=%@\"", option, key, obj];    
+        }
       }];
     } else {
       [displayString appendFormat:@" -d \"%@\"", [self encodedPostDataString]];
     }
-    
     
     [self.filesToBePosted enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
       
@@ -728,14 +733,21 @@ OSStatus extractIdentityAndTrust(CFDataRef inPKCS12Data,
   __block NSUInteger postLength = 0;
   
   [self.fieldsToBePosted enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL *stop) {
-    
-    NSString *thisFieldString = [NSString stringWithFormat:
-                                 @"--%@\r\nContent-Disposition: form-data; name=\"%@\"\r\n\r\n%@",
-                                 boundary, key, obj];
-    
-    [body appendData:[thisFieldString dataUsingEncoding:[self stringEncoding]]];
-    [body appendData:[@"\r\n" dataUsingEncoding:[self stringEncoding]]];
-  }];
+    //support for multivalued key
+    if( [obj isKindOfClass:[NSArray class]] ){
+      for(id o in obj){
+        NSString *thisFieldString = [NSString stringWithFormat:
+        @"--%@\r\nContent-Disposition: form-data; name=\"%@\"\r\n\r\n%@\r\n",
+          boundary, key, o];
+        [body appendData:[thisFieldString dataUsingEncoding:[self stringEncoding]]];
+      }
+    } else {
+      NSString *thisFieldString = [NSString stringWithFormat:
+      @"--%@\r\nContent-Disposition: form-data; name=\"%@\"\r\n\r\n%@\r\n",
+        boundary, key, obj];
+      [body appendData:[thisFieldString dataUsingEncoding:[self stringEncoding]]];
+    }
+  }];        
   
   [self.filesToBePosted enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
     
