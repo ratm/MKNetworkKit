@@ -1317,6 +1317,38 @@ totalBytesExpectedToWrite:(NSInteger)totalBytesExpectedToWrite {
   return [UIImage imageWithData:[self responseData]];
 }
 
+- (UIImage *)resizeImage:(UIImage*)image size:(CGSize)size {
+    
+	UIGraphicsBeginImageContext(size);
+	CGContextRef context = UIGraphicsGetCurrentContext();
+	CGContextSaveGState(context);
+	
+    CGRect rect = CGRectMake(0, 0, size.width, size.height);
+	if (image.size.width != rect.size.width || image.size.height != rect.size.height) {
+        CGSize imageSize = image.size;
+        double dx = imageSize.width - rect.size.width;
+        double dy = imageSize.height - rect.size.height;
+        if (dx > dy) {
+            imageSize.width = floor((imageSize.width/imageSize.height) * rect.size.height);
+            imageSize.height = rect.size.height;
+        } else {
+            imageSize.height = floor((imageSize.height/imageSize.width) * rect.size.width);
+            imageSize.width = rect.size.width;
+        }
+        rect = CGRectMake(rect.origin.x + floor(rect.size.width/2 - imageSize.width/2),
+                          rect.origin.y + floor(rect.size.height/2 - imageSize.height/2),
+                          imageSize.width, imageSize.height);
+	}
+    
+	[image drawInRect:rect];
+    
+	CGContextRestoreGState(context);
+	
+	UIImage* newImage = UIGraphicsGetImageFromCurrentImageContext();
+	UIGraphicsEndImageContext();
+	return newImage;
+}
+
 -(void) decompressedResponseImageOfSize:(CGSize) size completionHandler:(void (^)(UIImage *decompressedImage)) imageDecompressionHandler {
   
   static float scale = 1.0f;
@@ -1326,38 +1358,9 @@ totalBytesExpectedToWrite:(NSInteger)totalBytesExpectedToWrite {
   });
   
   dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
-    
     __block CGSize targetSize = CGSizeMake(size.width * scale, size.height * scale);
-    UIImage *image = [self responseImage];
-    CGImageRef imageRef = image.CGImage;
-    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    CGImageAlphaInfo alphaInfo = CGImageGetAlphaInfo(imageRef);
-
-    size_t imageWidth = (size_t)targetSize.width;
-    size_t imageHeight = (size_t)targetSize.height;
-    CGContextRef context = CGBitmapContextCreate(NULL,
-                                                 imageWidth,
-                                                 imageHeight,
-                                                 8,
-                                                 // Just always return width * 4 will be enough
-                                                 imageWidth * 4,
-                                                 // System only supports RGB, set explicitly
-                                                 colorSpace,
-                                                 // Makes system don't need to do extra conversion when displayed.
-                                                 alphaInfo | kCGBitmapByteOrder32Little);
-    CGColorSpaceRelease(colorSpace);
-    if (!context) {
-      return;
-    }
-    
-    
-    CGRect rect = (CGRect){CGPointZero, {imageWidth, imageHeight}};
-    CGContextDrawImage(context, rect, imageRef);
-    CGImageRef decompressedImageRef = CGBitmapContextCreateImage(context);
-    CGContextRelease(context);
-        
-    UIImage *decompressedImage = [[UIImage alloc] initWithCGImage:decompressedImageRef scale:scale orientation:image.imageOrientation];
-    CGImageRelease(decompressedImageRef);
+      UIImage *image = [self responseImage];
+      UIImage *decompressedImage = [self resizeImage:image size:targetSize];
     dispatch_async(dispatch_get_main_queue(), ^{
       imageDecompressionHandler(decompressedImage);
     });
